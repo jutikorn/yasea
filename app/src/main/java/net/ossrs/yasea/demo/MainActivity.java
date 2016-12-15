@@ -38,7 +38,7 @@ public class MainActivity extends Activity implements RtmpHandler.RtmpListener,
     Button btnSwitchEncoder = null;
 
     private SharedPreferences sp;
-    private String rtmpUrl = "rtmp://ossrs.net/" + getRandomAlphaString(3) + '/' + getRandomAlphaDigitString(5);
+    private String rtmpUrl = "rtmp://ec2-54-255-82-193.ap-southeast-1.compute.amazonaws.com/livepop/livepop";//rtmp://ossrs.net/" + getRandomAlphaString(3) + '/' + getRandomAlphaDigitString(5);
     private String recPath = Environment.getExternalStorageDirectory().getPath() + "/test.mp4";
 
     private SrsPublisher mPublisher;
