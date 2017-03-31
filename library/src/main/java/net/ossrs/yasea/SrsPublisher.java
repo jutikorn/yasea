@@ -36,10 +36,10 @@ public class SrsPublisher {
         mCameraView = view;
         mCameraView.setPreviewCallback(new SrsCameraView.PreviewCallback() {
             @Override
-            public void onGetYuvFrame(byte[] data) {
+            public void onGetYuvFrame(byte[] data, int rotate) {
                 calcSamplingFps();
                 if (!sendAudioOnly) {
-                    mEncoder.onGetYuvFrame(data);
+                    mEncoder.onGetYuvFrame(data, rotate);
                 }
             }
         });
@@ -233,7 +233,6 @@ public class SrsPublisher {
     }
 
     public void setScreenOrientation(int orientation) {
-        mCameraView.setPreviewOrientation(orientation);
         mEncoder.setScreenOrientation(orientation);
     }
 

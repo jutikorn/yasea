@@ -11,6 +11,7 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewTreeObserver;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
@@ -65,15 +66,21 @@ public class MainActivity extends Activity implements RtmpHandler.RtmpListener,
         btnSwitchCamera = (Button) findViewById(R.id.swCam);
         btnRecord = (Button) findViewById(R.id.record);
         btnSwitchEncoder = (Button) findViewById(R.id.swEnc);
-
-        mPublisher = new SrsPublisher((SrsCameraView) findViewById(R.id.preview));
-        mPublisher.setEncodeHandler(new SrsEncodeHandler(this));
-        mPublisher.setRtmpHandler(new RtmpHandler(this));
-        mPublisher.setRecordHandler(new SrsRecordHandler(this));
-        mPublisher.setPreviewResolution(1280, 720);
-        mPublisher.setOutputResolution(384, 640);
-        mPublisher.setVideoSmoothMode();
-        mPublisher.startCamera();
+        final SrsCameraView cameraView = (SrsCameraView) findViewById(R.id.preview);
+        cameraView.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+            @Override
+            public void onGlobalLayout() {
+                cameraView.getViewTreeObserver().removeOnGlobalLayoutListener(this);
+                mPublisher = new SrsPublisher(cameraView);
+                mPublisher.setEncodeHandler(new SrsEncodeHandler(MainActivity.this));
+                mPublisher.setRtmpHandler(new RtmpHandler(MainActivity.this));
+                mPublisher.setRecordHandler(new SrsRecordHandler(MainActivity.this));
+                mPublisher.setPreviewResolution(cameraView.getHeight()/2, cameraView.getWidth()/2);
+                mPublisher.setOutputResolution(432, 768);
+                mPublisher.setVideoSmoothMode();
+                mPublisher.startCamera();
+            }
+        });
 
         btnPublish.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -169,32 +176,42 @@ public class MainActivity extends Activity implements RtmpHandler.RtmpListener,
         super.onResume();
         final Button btn = (Button) findViewById(R.id.publish);
         btn.setEnabled(true);
-        mPublisher.resumeRecord();
+        if(mPublisher != null){
+            mPublisher.resumeRecord();
+        }
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        mPublisher.pauseRecord();
+       if(mPublisher != null){
+           mPublisher.pauseRecord();
+       }
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        mPublisher.stopPublish();
-        mPublisher.stopRecord();
+        if(mPublisher != null){
+            mPublisher.stopPublish();
+            mPublisher.stopRecord();
+        }
     }
 
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-        mPublisher.stopEncode();
-        mPublisher.stopRecord();
+       if(mPublisher != null){
+           mPublisher.stopEncode();
+           mPublisher.stopRecord();
+       }
         btnRecord.setText("record");
         mPublisher.setScreenOrientation(newConfig.orientation);
         if (btnPublish.getText().toString().contentEquals("stop")) {
-            mPublisher.startEncode();
-            mPublisher.startCamera();
+            if(mPublisher != null) {
+                mPublisher.startEncode();
+                mPublisher.startCamera();
+            }
         }
     }
 
@@ -223,8 +240,10 @@ public class MainActivity extends Activity implements RtmpHandler.RtmpListener,
     private void handleException(Exception e) {
         try {
             Toast.makeText(getApplicationContext(), e.getMessage(), Toast.LENGTH_SHORT).show();
-            mPublisher.stopPublish();
-            mPublisher.stopRecord();
+            if(mPublisher != null){
+                mPublisher.stopPublish();
+                mPublisher.stopRecord();
+            }
             btnPublish.setText("publish");
             btnRecord.setText("record");
             btnSwitchEncoder.setEnabled(true);

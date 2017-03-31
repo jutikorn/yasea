@@ -365,7 +365,7 @@ public class SrsEncoder {
         }
     }
 
-    public void onGetYuvFrame(byte[] data) {
+    public void onGetYuvFrame(byte[] data, int rotate) {
         // Check video frame cache number to judge the networking situation.
         // Just cache GOP / FPS seconds data according to latency.
         AtomicInteger videoFrameCacheNumber = flvMuxer.getVideoFrameCacheNumber();
@@ -373,17 +373,18 @@ public class SrsEncoder {
             long pts = System.nanoTime() / 1000 - mPresentTimeUs;
             if (useSoftEncoder) {
                 if (mOrientation == Configuration.ORIENTATION_PORTRAIT) {
-                    swPortraitYuvFrame(data, pts);
+                    swPortraitYuvFrame(data, pts, rotate);
                 } else {
-                    swLandscapeYuvFrame(data, pts);
+                    swLandscapeYuvFrame(data, pts, rotate);
                 }
             } else {
                 byte[] processedData = mOrientation == Configuration.ORIENTATION_PORTRAIT ?
-                        hwPortraitYuvFrame(data) : hwLandscapeYuvFrame(data);
+                        hwPortraitYuvFrame(data, rotate) : hwLandscapeYuvFrame(data, rotate);
                 if (processedData != null) {
                     onProcessedYuvFrame(processedData, pts);
                 } else {
-                    mHandler.notifyEncodeIllegalArgumentException(new IllegalArgumentException("libyuv failure"));
+                    Thread.getDefaultUncaughtExceptionHandler().uncaughtException(Thread.currentThread(),
+                            new IllegalArgumentException("libyuv failure"));
                 }
             }
 
@@ -397,63 +398,63 @@ public class SrsEncoder {
         }
     }
 
-    private byte[] hwPortraitYuvFrame(byte[] data) {
+    private byte[] hwPortraitYuvFrame(byte[] data, int rotate) {
         if (mCameraFaceFront) {
             switch (mVideoColorFormat) {
                 case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar:
-                    return NV21ToI420(data, vPrevWidth, vPrevHeight, true, 270);
+                    return NV21ToI420(data, vPrevWidth, vPrevHeight, true, rotate);
                 case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar:
-                    return NV21ToNV12(data, vPrevWidth, vPrevHeight, true, 270);
+                    return NV21ToNV12(data, vPrevWidth, vPrevHeight, true, rotate);
                 default:
                     throw new IllegalStateException("Unsupported color format!");
             }
         } else {
             switch (mVideoColorFormat) {
                 case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar:
-                    return NV21ToI420(data, vPrevWidth, vPrevHeight, false, 90);
+                    return NV21ToI420(data, vPrevWidth, vPrevHeight, false, rotate);
                 case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar:
-                    return NV21ToNV12(data, vPrevWidth, vPrevHeight, false, 90);
-                default:
-                    throw new IllegalStateException("Unsupported color format!");
-            }
-        }
-    }
-
-    private byte[] hwLandscapeYuvFrame(byte[] data) {
-        if (mCameraFaceFront) {
-            switch (mVideoColorFormat) {
-                case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar:
-                    return NV21ToI420(data, vPrevWidth, vPrevHeight, true, 0);
-                case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar:
-                    return NV21ToNV12(data, vPrevWidth, vPrevHeight, true, 0);
-                default:
-                    throw new IllegalStateException("Unsupported color format!");
-            }
-        } else {
-            switch (mVideoColorFormat) {
-                case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar:
-                    return NV21ToI420(data, vPrevWidth, vPrevHeight, false, 0);
-                case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar:
-                    return NV21ToNV12(data, vPrevWidth, vPrevHeight, false, 0);
+                    return NV21ToNV12(data, vPrevWidth, vPrevHeight, false, rotate);
                 default:
                     throw new IllegalStateException("Unsupported color format!");
             }
         }
     }
 
-    private void swPortraitYuvFrame(byte[] data, long pts) {
+    private byte[] hwLandscapeYuvFrame(byte[] data, int rotate) {
         if (mCameraFaceFront) {
-            NV21SoftEncode(data, vPrevWidth, vPrevHeight, true, 270, pts);
+            switch (mVideoColorFormat) {
+                case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar:
+                    return NV21ToI420(data, vPrevWidth, vPrevHeight, true, rotate);
+                case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar:
+                    return NV21ToNV12(data, vPrevWidth, vPrevHeight, true, rotate);
+                default:
+                    throw new IllegalStateException("Unsupported color format!");
+            }
         } else {
-            NV21SoftEncode(data, vPrevWidth, vPrevHeight, false, 90, pts);
+            switch (mVideoColorFormat) {
+                case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar:
+                    return NV21ToI420(data, vPrevWidth, vPrevHeight, false, rotate);
+                case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar:
+                    return NV21ToNV12(data, vPrevWidth, vPrevHeight, false, rotate);
+                default:
+                    throw new IllegalStateException("Unsupported color format!");
+            }
         }
     }
 
-    private void swLandscapeYuvFrame(byte[] data, long pts) {
+    private void swPortraitYuvFrame(byte[] data, long pts, int rotate) {
         if (mCameraFaceFront) {
-            NV21SoftEncode(data, vPrevWidth, vPrevHeight, true, 0, pts);
+            NV21SoftEncode(data, vPrevWidth, vPrevHeight, true, rotate, pts);
         } else {
-            NV21SoftEncode(data, vPrevWidth, vPrevHeight, false, 0, pts);
+            NV21SoftEncode(data, vPrevWidth, vPrevHeight, false, rotate, pts);
+        }
+    }
+
+    private void swLandscapeYuvFrame(byte[] data, long pts, int rotate) {
+        if (mCameraFaceFront) {
+            NV21SoftEncode(data, vPrevWidth, vPrevHeight, true, rotate, pts);
+        } else {
+            NV21SoftEncode(data, vPrevWidth, vPrevHeight, false, rotate, pts);
         }
     }
 

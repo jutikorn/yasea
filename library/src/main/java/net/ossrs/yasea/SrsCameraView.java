@@ -1,11 +1,13 @@
 package net.ossrs.yasea;
 
+import android.app.Activity;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.ImageFormat;
 import android.hardware.Camera;
-import android.os.Build;
 import android.util.AttributeSet;
+import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
@@ -26,9 +28,11 @@ public class SrsCameraView extends SurfaceView implements SurfaceHolder.Callback
     private int mPreviewWidth;
     private int mPreviewHeight;
     private boolean mIsEncoding;
+    private int mRotationPicture;
+
 
     public interface PreviewCallback {
-        void onGetYuvFrame(byte[] data);
+        void onGetYuvFrame(byte[] data, int rotationPicture);
     }
 
     public SrsCameraView(Context context) {
@@ -41,26 +45,39 @@ public class SrsCameraView extends SurfaceView implements SurfaceHolder.Callback
 
     public void setCameraId(int id) {
         mCamId = id;
-        setPreviewOrientation(mPreviewOrientation);
+        setPreviewOrientation(mCamId, mCamera);
     }
 
-    public void setPreviewOrientation(int orientation) {
-        mPreviewOrientation = orientation;
-        Camera.CameraInfo info = new Camera.CameraInfo();
-        Camera.getCameraInfo(mCamId, info);
-        if (info.facing == Camera.CameraInfo.CAMERA_FACING_BACK) {
-            if (orientation == Configuration.ORIENTATION_PORTRAIT) {
-                mPreviewRotation = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N ? 270 : 90;
-            } else if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
-                mPreviewRotation = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N ? 180 : 0;
-            }
-        } else if (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
-            if (orientation == Configuration.ORIENTATION_PORTRAIT) {
-                mPreviewRotation = 90;
-            } else if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
-                mPreviewRotation = 0;
-            }
+    public void setPreviewOrientation(int cameraId){
+        setPreviewOrientation(cameraId, mCamera);
+    }
+
+
+    public void setPreviewOrientation(int cameraId, android.hardware.Camera camera) {
+        android.hardware.Camera.CameraInfo info =
+                new android.hardware.Camera.CameraInfo();
+        android.hardware.Camera.getCameraInfo(cameraId, info);
+        int rotation = ((Activity)getContext()).getWindowManager().getDefaultDisplay()
+                .getRotation();
+        int degrees = 0;
+        switch (rotation) {
+            case Surface.ROTATION_0: degrees = 0; break;
+            case Surface.ROTATION_90: degrees = 90; break;
+            case Surface.ROTATION_180: degrees = 180; break;
+            case Surface.ROTATION_270: degrees = 270; break;
         }
+
+        int result;
+        if (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+            result = (info.orientation + degrees) % 360;
+            result = (360 - result) % 360;  // compensate the mirror
+            mRotationPicture = (360 - result) % 360;
+        } else {  // back-facing
+            result = (info.orientation - degrees + 360) % 360;
+            mRotationPicture = result;
+
+        }
+        mPreviewRotation = result;
     }
 
     public int getCameraId() {
@@ -112,7 +129,9 @@ public class SrsCameraView extends SurfaceView implements SurfaceHolder.Callback
         params.setFlashMode(Camera.Parameters.FLASH_MODE_OFF);
         params.setWhiteBalance(Camera.Parameters.WHITE_BALANCE_AUTO);
         params.setSceneMode(Camera.Parameters.SCENE_MODE_AUTO);
-
+        params.setRotation(mRotationPicture);
+        params.set("orientation", "portrait");
+        params.set("rotation", mRotationPicture);
         List<String> supportedFocusModes = params.getSupportedFocusModes();
         if (supportedFocusModes != null && !supportedFocusModes.isEmpty()) {
             if (supportedFocusModes.contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE)) {
@@ -161,6 +180,23 @@ public class SrsCameraView extends SurfaceView implements SurfaceHolder.Callback
         }
     }
 
+    public void flashOff() {
+        if (getContext().getPackageManager().hasSystemFeature(PackageManager.FEATURE_CAMERA_FLASH)){
+            if (mCamera != null) {
+                Camera.Parameters parameters = mCamera.getParameters();
+                List<String> flashModes = parameters.getSupportedFlashModes();
+
+                String flashMode = parameters.getFlashMode();
+                if (!Camera.Parameters.FLASH_MODE_OFF.equals(flashMode)) {
+                    if (flashModes.contains(Camera.Parameters.FLASH_MODE_OFF)) {
+                        parameters.setFlashMode(Camera.Parameters.FLASH_MODE_OFF);
+                        mCamera.setParameters(parameters);
+                    }
+                }
+            }
+        }
+    }
+
     private Camera openCamera() {
         Camera camera;
         if (mCamId < 0) {
@@ -186,6 +222,7 @@ public class SrsCameraView extends SurfaceView implements SurfaceHolder.Callback
             }
         }
         camera = Camera.open(mCamId);
+        setPreviewOrientation(mCamId, camera);
         return camera;
     }
 
@@ -225,7 +262,7 @@ public class SrsCameraView extends SurfaceView implements SurfaceHolder.Callback
     @Override
     public void onPreviewFrame(byte[] data, Camera camera) {
         if (mIsEncoding) {
-            mPrevCb.onGetYuvFrame(data);
+            mPrevCb.onGetYuvFrame(data, mRotationPicture);
             camera.addCallbackBuffer(mYuvPreviewFrame);
         }
     }
@@ -248,4 +285,5 @@ public class SrsCameraView extends SurfaceView implements SurfaceHolder.Callback
     @Override
     public void surfaceDestroyed(SurfaceHolder arg0) {
     }
+
 }
